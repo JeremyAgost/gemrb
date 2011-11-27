@@ -39,7 +39,7 @@
 #include <cassert>
 #include <cstdio>
 
-#ifdef TARGET_OS_IPHONE
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
 extern "C" {
 	#include "SDL_sysvideo.h"
 	#include "SDL_uikitkeyboard.h"
@@ -393,7 +393,8 @@ int SDLVideoDriver::PollEvents() {
 					key = GEM_RIGHT;
 					break;
 				case SDLK_DELETE:
-#ifndef TARGET_OS_IPHONE
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE 
+#else
 					//iOS currently doesnt have a backspace so we use delete. 
 					//This change should be future proof in the event apple changes the delete key to a backspace.
 					key = GEM_DELETE;
@@ -643,7 +644,7 @@ void SDLVideoDriver::HideSoftKeyboard()
 {
 
 	if(core->UseSoftKeyboard){
-#ifdef TARGET_OS_IPHONE
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
 		SDL_iPhoneKeyboardHide(SDL_GetFocusWindow());
 #endif
 #ifdef ANDROID
@@ -660,7 +661,7 @@ This method is intended for devices with no physical keyboard or with an optiona
 void SDLVideoDriver::ShowSoftKeyboard()
 {
 	if(core->UseSoftKeyboard){
-#ifdef TARGET_OS_IPHONE
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
 		SDL_iPhoneKeyboardShow(SDL_GetFocusWindow());
 #endif
 #ifdef ANDROID
@@ -2625,7 +2626,7 @@ void SDLVideoDriver::ClickMouse(unsigned int button)
 	}
 }
 
-void SDLVideoDriver::MouseClickEvent(Uint8 type, Uint8 button)
+void SDLVideoDriver::MouseClickEvent(SDL_EventType type, Uint8 button)
 {
 	SDL_Event *event = new SDL_Event();
 	event->type = type;

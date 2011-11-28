@@ -2474,8 +2474,9 @@ PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Ori
 	StartNode->orient = Orientation;
 
 	int Count = 0;
-	int Max = Distance(start,dest);
-	for (int Steps = 0; Steps<Max; Steps++) {
+	int LinDist = Distance(start,dest);
+  int AbsoluteMax = 1000; // Arbitrary?
+	for (int Steps = 0; Steps<AbsoluteMax && ((flags==GL_CONTINUE) || Steps<LinDist); Steps++) {
 		if (!Count) {
 			StartNode->Next = new PathNode;
 			StartNode->Next->Parent = StartNode;
@@ -2487,8 +2488,8 @@ PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Ori
 		}
 
 		Point p;
-		p.x = (ieWord) start.x + ((dest.x - start.x) * Steps / Max);
-		p.y = (ieWord) start.y + ((dest.y - start.y) * Steps / Max);
+		p.x = (ieWord) start.x + ((dest.x - start.x) * Steps / LinDist);
+		p.y = (ieWord) start.y + ((dest.y - start.y) * Steps / LinDist);
 
 		//the path ends here as it would go off the screen, causing problems
 		//maybe there is a better way, but i needed a quick hack to fix
@@ -2511,6 +2512,7 @@ PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Ori
 				break;
 			case GL_PASS:
 				break;
+      case GL_CONTINUE:
 			default: //premature end
 				return Return;
 		}

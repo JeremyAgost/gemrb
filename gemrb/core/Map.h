@@ -88,8 +88,9 @@ class Wall_Polygon;
 
 //getline flags
 #define GL_NORMAL         0
-#define GL_PASS           1
+#define GL_PASS           1   // pass through walls in path from start to dest
 #define GL_REBOUND        2
+#define GL_CONTINUE       3   // continue past dest until hit wall
 
 //sparkle types
 #define SPARKLE_PUFF      1

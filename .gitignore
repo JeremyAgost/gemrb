@@ -29,3 +29,5 @@ Makefile.in
 /stamp-h1
 /cmake_uninstall.cmake
 /CMakeCache.txt
+
+.DS_Store

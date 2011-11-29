@@ -32,3 +32,5 @@ Makefile.in
 
 .DS_Store
 /build
+
+/apple/Projectile.xcworkspace

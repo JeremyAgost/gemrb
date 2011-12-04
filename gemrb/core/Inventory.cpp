@@ -1799,8 +1799,8 @@ unsigned int Inventory::FindStealableItem()
 		CREItem *item = Slots[slot];
 		//can't steal empty slot
 		if (!item) continue;
-		//bit 1 is stealable slot
-		if (!(core->QuerySlotFlags(slot)&1) ) continue;
+		//bit 1 is unstealable slot
+		if ( core->QuerySlotFlags(slot)&1 ) continue;
 		//can't steal equipped weapon
 		if ((unsigned int) (Equipped+SLOT_MELEE) == core->QuerySlot(slot)) continue;
 		//can't steal flagged items

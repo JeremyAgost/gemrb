@@ -2463,56 +2463,106 @@ PathNode* Map::GetLine(const Point &start, int Steps, int Orientation, int flags
 	return GetLine(start, dest, Steps, Orientation, flags);
 }
 
+#define REBOUND_MAX_STEPS	2500	// Arbitrary for the moment
 PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Orientation, int flags)
 {
+	print("GL(%d,%d)-(%d,%d)-%d-%d-%d\n",start.x,start.y,dest.x,dest.y,Speed,Orientation,flags);	//~~DEBUG~~
 	PathNode* StartNode = new PathNode;
 	PathNode *Return = StartNode;
 	StartNode->Next = NULL;
 	StartNode->Parent = NULL;
+	// In case we end up making no steps?
 	StartNode->x = start.x;
 	StartNode->y = start.y;
 	StartNode->orient = Orientation;
 
+	int LineDist = Distance(start,dest);
+	Point Next(start.x,start.y);
+	
+	// These are only used for rebounding calculation
+	// Floating point is necessary because the distance offset per step is < 1
+	float offX = float(dest.x-start.x)/LineDist;
+	float offY = float(dest.y-start.y)/LineDist;
+	float nextX = start.x;
+	float nextY = start.y;
+	float lastX, lastY;
+	print("GL... Off(%f,%f)\n", offX, offY);	//~~DEBUG~~
+	
 	int Count = 0;
-	int LinDist = Distance(start,dest);
-  int AbsoluteMax = 1000; // Arbitrary?
-	for (int Steps = 0; Steps<AbsoluteMax && ((flags==GL_CONTINUE) || Steps<LinDist); Steps++) {
+	int Max = (flags==GL_REBOUND ? REBOUND_MAX_STEPS : LineDist);
+	for (int Steps = 0; Steps<Max; Steps++) {
 		if (!Count) {
+			StartNode->x = Next.x;
+			StartNode->y = Next.y;
+			StartNode->orient = Orientation;
+			
 			StartNode->Next = new PathNode;
 			StartNode->Next->Parent = StartNode;
 			StartNode = StartNode->Next;
 			StartNode->Next = NULL;
 			Count=Speed;
+			if (flags==GL_REBOUND) {	//~~DEBUG~~
+				print("GL(%d,%d)\n",Next.x,Next.y);
+			}
 		} else {
 			Count--;
 		}
 
-		Point p;
-		p.x = (ieWord) start.x + ((dest.x - start.x) * Steps / LinDist);
-		p.y = (ieWord) start.y + ((dest.y - start.y) * Steps / LinDist);
+		if (flags==GL_REBOUND) {
+			// Floats are just for successive point calculations
+			lastX = nextX;			lastY = nextY;
+			nextX = lastX + offX;	nextY = lastY + offY;
+			
+			Next.x = (short)nextX;	Next.y = (short)nextY;
+		} else {
+			Next.x = (ieWord) start.x + ((dest.x - start.x) * Steps / Max);
+			Next.y = (ieWord) start.y + ((dest.y - start.y) * Steps / Max);
+		}
 
 		//the path ends here as it would go off the screen, causing problems
 		//maybe there is a better way, but i needed a quick hack to fix
 		//the crash in projectiles
-		if ((signed) p.x<0 || (signed) p.y<0) {
+		if ((signed) Next.x<0 || (signed) Next.y<0) {
 			return Return;
 		}
-		if ((ieWord) p.x>Width*16 || (ieWord) p.y>Height*12) {
+		if ((ieWord) Next.x>Width*16 || (ieWord) Next.y>Height*12) {
 			return Return;
 		}
 
-		StartNode->x = p.x;
-		StartNode->y = p.y;
-		StartNode->orient = Orientation;
-		bool wall = !( GetBlocked( p ) & PATH_MAP_PASSABLE );
+		bool wall = !( GetBlocked( Next ) & PATH_MAP_PASSABLE );
 		if (wall) switch (flags) {
+			
 			case GL_REBOUND:
-				Orientation = (Orientation + 8) &15;
+//				Orientation = (Orientation + 8) &15;
 				//recalculate dest (mirror it)
+			{
+				Point TestP;
+				// Test possible direction changes, 90º CW or CCW
+				
+				TestP.x = short(lastX - offX);
+				TestP.y = short(lastY + offY);
+				if ( GetBlocked( TestP ) & PATH_MAP_PASSABLE ) {
+					// Turn 90º CCW
+					offX = -offX;
+					//Next.x = TestP.x;
+					Orientation = (Orientation + 4) &15;
+					print("GL(CCW)\n");	//~~DEBUG~~
+				}
+				
+				TestP.x = short(lastX + offX);
+				TestP.y = short(lastY - offY);
+				if ( GetBlocked( TestP ) & PATH_MAP_PASSABLE ) {
+					// Turn 90º CW
+					offY = -offY;
+					//Next.y = TestP.y;
+					Orientation = (Orientation - 4) &15;
+					print("GL(CCW)\n");	//~~DEBUG~~
+				}
+			}
+				
 				break;
 			case GL_PASS:
 				break;
-      case GL_CONTINUE:
 			default: //premature end
 				return Return;
 		}

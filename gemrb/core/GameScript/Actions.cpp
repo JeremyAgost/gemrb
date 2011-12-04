@@ -4346,7 +4346,8 @@ void GameScript::PickPockets(Scriptable *Sender, Action* parameters)
 		}
 	}
 
-	if (ret==MIC_NOITEM) {
+	// Money can't be stolen in original engine
+	if (false&&ret==MIC_NOITEM) {
 		int money=0;
 		//go for money too
 		if (scr->GetStat(IE_GOLD)>0) {

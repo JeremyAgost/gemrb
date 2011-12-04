@@ -671,6 +671,11 @@ void Projectile::ChangePhase()
 			StopSound();
 			Payload();
 			phase = P_TRAVEL2;
+			
+			if (ExtFlags&PEF_CONTINUE) {
+				ContinueTarget();
+				return;
+			}
 		}
 		//freeze on target, this is recommended only for child projectiles
 		//as the projectile won't go away on its own
@@ -887,6 +892,30 @@ void Projectile::SetCaster(ieDword caster, int level)
 ieDword Projectile::GetCaster() const
 {
 	return Caster;
+}
+
+void Projectile::ContinueTarget()
+{
+	Target = 0;
+	
+	short offX = Destination.x - Origin.x;
+	short offY = Destination.y - Origin.y;
+	float angle = (atan2(offY, offX) * 180 / 3.14159265);
+	unsigned char orient = (((unsigned char)(angle / 22.5)) + 12) &15;
+	Point Distant(Destination.x + offX, Destination.y + offY);
+	
+	ClearPath();
+	int PathMode = ( ExtFlags&PEF_BOUNCE ?  GL_REBOUND : GL_NORMAL );
+	// For some reason Pos isn't the proper location anymore?
+	// Orientation is also invalid now?
+	path = area->GetLine( Destination, Distant, Speed, orient, PathMode );
+	
+	PathNode *p = path;
+	while (p->Next) {
+		p = p->Next;
+	}
+	Destination.x = p->x;	// Destination is last node in path
+	Destination.y = p->y;
 }
 
 void Projectile::NextTarget(const Point &p)

@@ -401,6 +401,7 @@ private:
 
 	Actor *GetTarget();
 	void NextTarget(const Point &p);
+	void ContinueTarget();
 	void SetupPalette(Animation *anim[], Palette *&pal, const ieByte *gradients);
 };
 

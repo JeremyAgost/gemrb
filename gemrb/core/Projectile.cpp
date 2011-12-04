@@ -911,7 +911,9 @@ void Projectile::NextTarget(const Point &p)
 		Destination = Pos;
 		return;
 	}
-	path = area->GetLine( Pos, Destination, Speed, Orientation, GL_PASS );
+	
+	int PathMode = ( !(ExtFlags&PEF_CONTINUE) && (ExtFlags&PEF_BOUNCE) ?  GL_REBOUND : GL_PASS );
+	path = area->GetLine( Pos, Destination, Speed, Orientation, PathMode );
 }
 
 void Projectile::SetTarget(const Point &p)

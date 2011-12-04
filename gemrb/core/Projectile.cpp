@@ -75,6 +75,7 @@ Projectile::Projectile()
 	drawSpark = 0;
 	ZPos = 0;
 	extension_delay = 0;
+	LastHit = 0;
 	if (!server)
 		server = core->GetProjectileServer();
 }
@@ -606,6 +607,35 @@ void Projectile::Payload()
 		// Continue projectiles may still need the effects to do touch damage
 		delete effects;
 		effects = NULL;
+	}
+}
+
+void Projectile::ContinuePayload()
+{
+	// Projectile traveling, damages upon touch
+	// Map::GetAllActorsInRadius() takes radius in search cell units?
+	Actor **nearActors = area->GetAllActorsInRadius(Pos, GA_NO_LOS, 1);
+	if (nearActors) {
+		Actor *target, *original = area->GetActorByGlobalID(Caster);
+		for (int i = 0; (target=nearActors[i]); i++) {
+			if (target==LastHit) continue;
+			// May be possible to call payload for each touched actor?
+			// Something like Target = target; Payload();
+			int res = effects->CheckImmunity ( target );
+			if (res>0) {
+				EffectQueue *eff = effects->CopySelf();
+				eff->SetOwner(original);
+				if(ExtFlags&PEF_RGB) {
+					target->SetColorMod(0xff, RGBModifier::ADD, ColorSpeed,
+										RGB >> 8, RGB >> 16, RGB >> 24);
+				}
+				
+				eff->AddAllEffects(target, target->Pos);
+				print("continue target %s hit\n", target->GetName(0));
+				// don't touch same target too often
+				LastHit = target;
+			}
+		}
 	}
 }
 
@@ -1250,6 +1280,11 @@ int Projectile::Update()
 	if (phase == P_TRAVEL || phase == P_TRAVEL2) {
 		DoStep(Speed);
 	}
+	
+	if (phase == P_TRAVEL2 && (ExtFlags&PEF_CONTINUE)) {
+		ContinuePayload();
+	}
+	
 	return 1;
 }
 

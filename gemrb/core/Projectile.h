@@ -263,6 +263,8 @@ protected:
 	int bend;
 	int drawSpark;
 	Holder<SoundHandle> travel_handle;
+	//used to ensure a continuing projectile doesn't hit same actor twice in a row
+	Actor *LastHit;
 public:
 	void SetCaster(ieDword t, int level);
 	ieDword GetCaster() const;
@@ -365,6 +367,8 @@ private:
 	//apply spells and effects on the target, only in single travel mode
 	//area effect projectiles call a separate single travel projectile for each affected target
 	void Payload();
+	//apply effect in small area for continuing projectiles
+	void ContinuePayload();
 	//if there is an extension, convert to exploding or wait for trigger
 	void EndTravel();
 	//apply default spell

@@ -2463,13 +2463,88 @@ PathNode* Map::GetLine(const Point &start, int Steps, int Orientation, int flags
 	return GetLine(start, dest, Steps, Orientation, flags);
 }
 
-#define REBOUND_MAX_STEPS	2500	// Arbitrary for the moment
-#define GL_DEBUG	0
 PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Orientation, int flags)
 {
+	PathNode* StartNode = new PathNode;
+	PathNode *Return = StartNode;
+	StartNode->Next = NULL;
+	StartNode->Parent = NULL;
+	StartNode->x = start.x;
+	StartNode->y = start.y;
+	StartNode->orient = Orientation;
+	
+	if (flags == GL_REBOUND) return Return;	// There's a separate function for that
+	
+	int Count = 0;
+	int Max = Distance(start,dest);
+	for (int Steps = 0; Steps<Max; Steps++) {
+		if (!Count) {
+			StartNode->Next = new PathNode;
+			StartNode->Next->Parent = StartNode;
+			StartNode = StartNode->Next;
+			StartNode->Next = NULL;
+			Count=Speed;
+		} else {
+			Count--;
+		}
+		
+		Point p;
+		p.x = (ieWord) start.x + ((dest.x - start.x) * Steps / Max);
+		p.y = (ieWord) start.y + ((dest.y - start.y) * Steps / Max);
+		
+		//the path ends here as it would go off the screen, causing problems
+		//maybe there is a better way, but i needed a quick hack to fix
+		//the crash in projectiles
+		if ((signed) p.x<0 || (signed) p.y<0) {
+			return Return;
+		}
+		if ((ieWord) p.x>Width*16 || (ieWord) p.y>Height*12) {
+			return Return;
+		}
+		
+		StartNode->x = p.x;
+		StartNode->y = p.y;
+		StartNode->orient = Orientation;
+		bool wall = !( GetBlocked( p ) & PATH_MAP_PASSABLE );
+		if (wall) switch (flags) {
+			case GL_REBOUND:
+				Orientation = (Orientation + 8) &15;
+				//recalculate dest (mirror it)
+				break;
+			case GL_PASS:
+				break;
+			default: //premature end
+				return Return;
+		}
+	}
+	
+	return Return;
+}
+
+#define GL_DEBUG	0
+PathNode* Map::GetLineBouncing(const Point &start, const Point &directional, int Speed, int lifetime)
+{
+	int LineDist = Distance(start,directional);
+	Point Next(start.x,start.y);
+	
+	// These are only used for rebounding calculation
+	// Floating point is necessary because the distance offset per step is < 1
+	short difX = directional.x-start.x;
+	short difY = directional.y-start.y;
+	float offX = float(difX)/LineDist;
+	float offY = float(difY)/LineDist;
+	float nextX = start.x;
+	float nextY = start.y;
+	float lastX, lastY;
+	
+	// Recalculate orientation here based on travel angle
+	float angle = (atan2(difY, difX) * 180 / 3.14159265);
+	unsigned char orient = (((unsigned char)(angle / 22.5)) + 12) &15;
+	
 #if GL_DEBUG
-	print("GL(%d,%d)-(%d,%d)-%d-%d-%d\n",start.x,start.y,dest.x,dest.y,Speed,Orientation,flags);	//~~DEBUG~~
+	print("GLB... Offset(%f,%f) Orient(%d)\n", offX, offY, orient);	//~~DEBUG~~
 #endif
+	
 	PathNode* StartNode = new PathNode;
 	PathNode *Return = StartNode;
 	StartNode->Next = NULL;
@@ -2477,29 +2552,14 @@ PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Ori
 	// In case we end up making no steps?
 	StartNode->x = start.x;
 	StartNode->y = start.y;
-	StartNode->orient = Orientation;
-
-	int LineDist = Distance(start,dest);
-	Point Next(start.x,start.y);
-	
-	// These are only used for rebounding calculation
-	// Floating point is necessary because the distance offset per step is < 1
-	float offX = float(dest.x-start.x)/LineDist;
-	float offY = float(dest.y-start.y)/LineDist;
-	float nextX = start.x;
-	float nextY = start.y;
-	float lastX, lastY;
-#if GL_DEBUG
-	print("GL... Off(%f,%f)\n", offX, offY);	//~~DEBUG~~
-#endif
+	StartNode->orient = orient;
 	
 	int Count = 0;
-	int Max = (flags==GL_REBOUND ? REBOUND_MAX_STEPS : LineDist);
-	for (int Steps = 0; Steps<Max; Steps++) {
+	for (int Steps = 0; Steps < lifetime; Steps++) {
 		if (!Count) {
 			StartNode->x = Next.x;
 			StartNode->y = Next.y;
-			StartNode->orient = Orientation;
+			StartNode->orient = orient;
 			
 			StartNode->Next = new PathNode;
 			StartNode->Next->Parent = StartNode;
@@ -2507,25 +2567,17 @@ PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Ori
 			StartNode->Next = NULL;
 			Count=Speed;
 #if GL_DEBUG
-			if (flags==GL_REBOUND) {	//~~DEBUG~~
-				print("GL(%d,%d)\n",Next.x,Next.y);
-			}
+			print("\tNode(%d,%d)\n",Next.x,Next.y);	//~~DEBUG~~
 #endif
 		} else {
 			Count--;
 		}
 
-		if (flags==GL_REBOUND) {
-			// Floats are just for successive point calculations
-			lastX = nextX;			lastY = nextY;
-			nextX = lastX + offX;	nextY = lastY + offY;
-			
-			Next.x = (short)nextX;	Next.y = (short)nextY;
-		} else {
-			Next.x = (ieWord) start.x + ((dest.x - start.x) * Steps / Max);
-			Next.y = (ieWord) start.y + ((dest.y - start.y) * Steps / Max);
-		}
-
+		// Floats are just for successive point calculations
+		lastX = nextX;			lastY = nextY;
+		nextX = lastX + offX;	nextY = lastY + offY;
+		Next.x = (short)nextX;	Next.y = (short)nextY;
+		
 		//the path ends here as it would go off the screen, causing problems
 		//maybe there is a better way, but i needed a quick hack to fix
 		//the crash in projectiles
@@ -2535,50 +2587,38 @@ PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Ori
 		if ((ieWord) Next.x>Width*16 || (ieWord) Next.y>Height*12) {
 			return Return;
 		}
-
-		bool wall = !( GetBlocked( Next ) & PATH_MAP_PASSABLE );
-		if (wall) switch (flags) {
+		
+		if (!( GetBlocked( Next ) & PATH_MAP_PASSABLE )) {
+			// if Next blocked
+			Point TestP;
+			// Test possible direction changes, 90º CW or CCW
 			
-			case GL_REBOUND:
-//				Orientation = (Orientation + 8) &15;
-				//recalculate dest (mirror it)
-			{
-				Point TestP;
-				// Test possible direction changes, 90º CW or CCW
-				
-				TestP.x = short(lastX - offX);
-				TestP.y = short(lastY + offY);
-				if ( GetBlocked( TestP ) & PATH_MAP_PASSABLE ) {
-					// Turn 90º CCW
-					offX = -offX;
-					//Next.x = TestP.x;
-					Orientation = (Orientation + 4) &15;
+			TestP.x = short(lastX - offX);
+			TestP.y = short(lastY + offY);
+			if ( GetBlocked( TestP ) & PATH_MAP_PASSABLE ) {
+				// Turn 90º CCW
+				offX = -offX;
+				//Next.x = TestP.x;
+				orient = (orient + 4) &15;
 #if GL_DEBUG
-					print("GL(CCW)\n");	//~~DEBUG~~
+				print("\t\tBounce(CCW)\n");	//~~DEBUG~~
 #endif
-				}
-				
-				TestP.x = short(lastX + offX);
-				TestP.y = short(lastY - offY);
-				if ( GetBlocked( TestP ) & PATH_MAP_PASSABLE ) {
-					// Turn 90º CW
-					offY = -offY;
-					//Next.y = TestP.y;
-					Orientation = (Orientation - 4) &15;
-#if GL_DEBUG
-					print("GL(CCW)\n");	//~~DEBUG~~
-#endif
-				}
 			}
-				
-				break;
-			case GL_PASS:
-				break;
-			default: //premature end
-				return Return;
+			
+			TestP.x = short(lastX + offX);
+			TestP.y = short(lastY - offY);
+			if ( GetBlocked( TestP ) & PATH_MAP_PASSABLE ) {
+				// Turn 90º CW
+				offY = -offY;
+				//Next.y = TestP.y;
+				orient = (orient - 4) &15;
+#if GL_DEBUG
+				print("\t\tBounce(CW)\n");	//~~DEBUG~~
+#endif
+			}
 		}
 	}
-
+	
 	return Return;
 }
 

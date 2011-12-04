@@ -426,6 +426,8 @@ public:
 	PathNode* GetLine(const Point &start, const Point &dest, int flags);
 	PathNode* GetLine(const Point &start, int Steps, int Orientation, int flags);
 	PathNode* GetLine(const Point &start, const Point &dest, int speed, int Orientation, int flags);
+	// Precalculates a bouncing path using search map, directional point is used only to determine initial angle, lifetime is in (number of nodes * speed)
+	PathNode* GetLineBouncing(const Point &start, const Point &directional, int Speed, int lifetime);
 	/* Finds the path which leads to near d */
 	PathNode* FindPathNear(const Point &s, const Point &d, unsigned int size, unsigned int MinDistance = 0, bool sight = true);
 	/* Finds the path which leads to d */

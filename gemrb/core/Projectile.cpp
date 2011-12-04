@@ -602,8 +602,11 @@ void Projectile::Payload()
 		}
 	}
 
-	delete effects;
-	effects = NULL;
+	if (!(ExtFlags&PEF_CONTINUE)) {
+		// Continue projectiles may still need the effects to do touch damage
+		delete effects;
+		effects = NULL;
+	}
 }
 
 void Projectile::ApplyDefault()

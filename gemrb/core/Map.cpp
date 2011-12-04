@@ -2464,9 +2464,12 @@ PathNode* Map::GetLine(const Point &start, int Steps, int Orientation, int flags
 }
 
 #define REBOUND_MAX_STEPS	2500	// Arbitrary for the moment
+#define GL_DEBUG	0
 PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Orientation, int flags)
 {
+#if GL_DEBUG
 	print("GL(%d,%d)-(%d,%d)-%d-%d-%d\n",start.x,start.y,dest.x,dest.y,Speed,Orientation,flags);	//~~DEBUG~~
+#endif
 	PathNode* StartNode = new PathNode;
 	PathNode *Return = StartNode;
 	StartNode->Next = NULL;
@@ -2486,7 +2489,9 @@ PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Ori
 	float nextX = start.x;
 	float nextY = start.y;
 	float lastX, lastY;
+#if GL_DEBUG
 	print("GL... Off(%f,%f)\n", offX, offY);	//~~DEBUG~~
+#endif
 	
 	int Count = 0;
 	int Max = (flags==GL_REBOUND ? REBOUND_MAX_STEPS : LineDist);
@@ -2501,9 +2506,11 @@ PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Ori
 			StartNode = StartNode->Next;
 			StartNode->Next = NULL;
 			Count=Speed;
+#if GL_DEBUG
 			if (flags==GL_REBOUND) {	//~~DEBUG~~
 				print("GL(%d,%d)\n",Next.x,Next.y);
 			}
+#endif
 		} else {
 			Count--;
 		}
@@ -2546,7 +2553,9 @@ PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Ori
 					offX = -offX;
 					//Next.x = TestP.x;
 					Orientation = (Orientation + 4) &15;
+#if GL_DEBUG
 					print("GL(CCW)\n");	//~~DEBUG~~
+#endif
 				}
 				
 				TestP.x = short(lastX + offX);
@@ -2556,7 +2565,9 @@ PathNode* Map::GetLine(const Point &start, const Point &dest, int Speed, int Ori
 					offY = -offY;
 					//Next.y = TestP.y;
 					Orientation = (Orientation - 4) &15;
+#if GL_DEBUG
 					print("GL(CCW)\n");	//~~DEBUG~~
+#endif
 				}
 			}
 				

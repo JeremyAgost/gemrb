@@ -928,17 +928,20 @@ void Projectile::ContinueTarget()
 {
 	Target = 0;
 	
-	short offX = Destination.x - Origin.x;
-	short offY = Destination.y - Origin.y;
-	float angle = (atan2(offY, offX) * 180 / 3.14159265);
-	unsigned char orient = (((unsigned char)(angle / 22.5)) + 12) &15;
-	Point Distant(Destination.x + offX, Destination.y + offY);
+	short difX = Destination.x - Origin.x;
+	short difY = Destination.y - Origin.y;
+	Point Distant(Destination.x + difX, Destination.y + difY);
 	
 	ClearPath();
-	int PathMode = ( ExtFlags&PEF_BOUNCE ?  GL_REBOUND : GL_NORMAL );
+	int Lifetime = 2500;
 	// For some reason Pos isn't the proper location anymore?
-	// Orientation is also invalid now?
-	path = area->GetLine( Destination, Distant, Speed, orient, PathMode );
+	if (ExtFlags&PEF_BOUNCE) {
+		path = area->GetLineBouncing( Destination, Distant, Speed, Lifetime );
+	}
+	else {
+		// Need another line function for non-bouncing
+	}
+	if (!path) return;
 	
 	PathNode *p = path;
 	while (p->Next) {

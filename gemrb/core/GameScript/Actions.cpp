@@ -4346,7 +4346,9 @@ void GameScript::PickPockets(Scriptable *Sender, Action* parameters)
 		}
 	}
 
-	if (ret==MIC_NOITEM) {
+	// FIXME: In BG2 engine the gold item (MISC07) can be stolen but not the creature gold stat
+	// Make this change permanent or figure out an alternate behavior (optional config setting perhaps?)
+	if (false && ret==MIC_NOITEM) {
 		int money=0;
 		//go for money too
 		if (scr->GetStat(IE_GOLD)>0) {

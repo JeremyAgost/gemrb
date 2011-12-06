@@ -143,6 +143,7 @@ GameControl::GameControl(void)
 		scrollAreasWidth = 5;
 	}
 
+	tmp=0;
 	core->GetDictionary()->Lookup("Center",tmp);
 	if (tmp) {
 		ScreenFlags=SF_ALWAYSCENTER|SF_CENTERONACTOR;
@@ -1710,7 +1711,7 @@ void GameControl::TryToCast(Actor *source, Actor *tgt)
 
 	// cannot target spells on invisible or sanctuaried creatures
 	// invisible actors are invisible, so this is usually impossible by itself, but improved invisibility changes that
-	if ((tgt->GetStat(IE_STATE_ID)&STATE_INVISIBLE) || tgt->HasSpellState(SS_SANCTUARY)) {
+	if (source != tgt && ((tgt->GetStat(IE_STATE_ID)&STATE_INVISIBLE) || tgt->HasSpellState(SS_SANCTUARY))) {
 		displaymsg->DisplayConstantStringName(STR_NOSEE_NOCAST, DMC_RED, source);
 		ResetTargetMode();
 		return;
@@ -2028,6 +2029,9 @@ void GameControl::OnMouseUp(unsigned short x, unsigned short y, unsigned short B
 			DisplayStringCore(actor, VB_SELECT+core->Roll(1,3,-1), DS_CONST|DS_CONSOLE);
 			return;
 		}
+		// reset the action bar
+		core->GetGUIScriptEngine()->RunFunction("GUICommonWindows", "EmptyControls");
+		core->SetEventFlag(EF_ACTION);
 		core->GetDictionary()->SetAt( "MenuX", x );
 		core->GetDictionary()->SetAt( "MenuY", y );
 		core->GetGUIScriptEngine()->RunFunction( "GUICommon", "OpenFloatMenuWindow" );

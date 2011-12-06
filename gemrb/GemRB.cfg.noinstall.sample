@@ -104,8 +104,6 @@ TooltipDelay=500
 
 #CaseSensitive=1
 
-#SlowBIFs=0
-
 #####################################################
 #  GUI Parameters                                   #
 #####################################################
@@ -120,8 +118,8 @@ TooltipDelay=500
 # coordinates and may stop being clickable).        #
 #####################################################
 
-# Enable all gui enhancements ? [Boolean]
-GUIEnhancements = 1
+# Enable all gui enhancements ? [Integer]
+GUIEnhancements = 15
 
 
 #####################################################

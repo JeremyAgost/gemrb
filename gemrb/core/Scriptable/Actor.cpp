@@ -2554,14 +2554,28 @@ void Actor::RefreshPCStats() {
 			//wspattack appears to only effect warriors
 			int defaultattacks = 2 + 2*dualwielding;
 			if (stars) {
+				// In bg2 the proficiency and warrior level bonus is added after effects, so also ranged weapons are affected,
+				// since their rate of fire (apr) is set using an effect with a flat modifier.
+				// SetBase will compensate only for the difference between the current two stats, not considering the default
+				// example: actor with a bow gets 4 due to the equipping effect, while the wspatck bonus is 0-3
+				// the adjustment results in a base of 2-5 (2+[0-3]) and the modified stat degrades to 4+(4-[2-5]) = 8-[2-5] = 3-6
+				// instead of 4+[0-3] = 4-7
+				// For a master ranger at level 14, the difference ends up as 2 (1 apr).
+				// FIXME: but this isn't universally true or improved haste couldn't double the total apr! For the above case, we're half apr off.
 				if (tmplevel) {
-					SetBase(IE_NUMBEROFATTACKS, defaultattacks+wspattack[stars][tmplevel]);
+					int mod = Modified[IE_NUMBEROFATTACKS] - BaseStats[IE_NUMBEROFATTACKS];
+					BaseStats[IE_NUMBEROFATTACKS] = defaultattacks+wspattack[stars][tmplevel];
+					if (GetAttackStyle() == WEAPON_RANGED) { // FIXME: should actually check if a set-apr opcode variant was used
+						Modified[IE_NUMBEROFATTACKS] += wspattack[stars][tmplevel]; // no default
+					} else {
+						Modified[IE_NUMBEROFATTACKS] = BaseStats[IE_NUMBEROFATTACKS] + mod;
+					}
 				} else {
-					SetBase(IE_NUMBEROFATTACKS, defaultattacks);
+					SetBase(IE_NUMBEROFATTACKS, defaultattacks); // TODO: check if this shouldn't get +wspattack[stars][0]
 				}
 			} else {
 				// unproficient user - force defaultattacks
-				SetStat(IE_NUMBEROFATTACKS, defaultattacks, 0);
+				SetBase(IE_NUMBEROFATTACKS, defaultattacks);
 			}
 		}
 	}
@@ -2981,7 +2995,7 @@ void Actor::IdleActions(bool nonidle)
 			nextBored=time+core->Roll(1,30,bored_time);
 		}
 	} else {
-		if (nextBored<time) {
+		if (nextBored<time && !InMove()) {
 			nextBored = time+core->Roll(1,30,bored_time/10);
 			VerbalConstant(VB_BORED, 1);
 		}
@@ -3740,8 +3754,7 @@ void Actor::Resurrect()
 			game->kaputz->SetAt(DeathVar, value-1);
 		}
 	}
-	nextBored = game->GameTime + core->Roll(1,30,bored_time);
-	nextComment = game->GameTime + core->Roll(5,1000,bored_time/2);
+	ResetCommentTime();
 	//clear effects?
 }
 
@@ -5614,6 +5627,7 @@ void Actor::WalkTo(const Point &Des, ieDword flags, int MinDistance)
 		return;
 	}
 	SetRunFlags(flags);
+	ResetCommentTime();
 	// is this true???
 	if (Des.x==-2 && Des.y==-2) {
 		Point p((ieWord) Modified[IE_SAVEDXPOS], (ieWord) Modified[IE_SAVEDYPOS] );
@@ -6508,9 +6522,7 @@ void Actor::Rest(int hours)
 		inventory.ChargeAllItems (0);
 		spellbook.ChargeAllSpells ();
 	}
-	Game *game = core->GetGame();
-	nextBored = game->GameTime + core->Roll(1,30,bored_time);
-	nextComment = game->GameTime + core->Roll(5,1000,bored_time/2);
+	ResetCommentTime();
 }
 
 //returns the actual slot from the quickslot
@@ -6594,6 +6606,7 @@ bool Actor::UseItemPoint(ieDword slot, ieDword header, const Point &target, ieDw
 	Projectile *pro = itm->GetProjectile(this, header, target, slot, flags&UI_MISS);
 	ChargeItem(slot, header, item, itm, flags&UI_SILENT);
 	gamedata->FreeItem(itm,tmpresref, false);
+	ResetCommentTime();
 	if (pro) {
 		pro->SetCaster(GetGlobalID(), ITEM_CASTERLEVEL);
 		GetCurrentArea()->AddProjectile(pro, Pos, target);
@@ -6630,6 +6643,7 @@ bool Actor::UseItem(ieDword slot, ieDword header, Scriptable* target, ieDword fl
 	Projectile *pro = itm->GetProjectile(this, header, target->Pos, slot, flags&UI_MISS);
 	ChargeItem(slot, header, item, itm, flags&UI_SILENT);
 	gamedata->FreeItem(itm,tmpresref, false);
+	ResetCommentTime();
 	if (pro) {
 		//ieDword is unsigned!!
 		pro->SetCaster(GetGlobalID(), ITEM_CASTERLEVEL);
@@ -7256,7 +7270,7 @@ Actor *Actor::CopySelf(bool mislead) const
 
 	area->AddActor(newActor);
 	newActor->SetPosition( Pos, CC_CHECK_IMPASSABLE, 0 );
-	newActor->SetOrientation(GetOrientation(),0);
+	newActor->SetOrientation(GetOrientation(), false);
 	newActor->SetStance( IE_ANI_READY );
 
 	//and apply them
@@ -7482,6 +7496,7 @@ void Actor::ResetState()
 	CureInvisibility();
 	CureSanctuary();
 	SetModal(MS_NONE);
+	ResetCommentTime();
 }
 
 // doesn't check the range, but only that the azimuth and the target
@@ -7682,4 +7697,11 @@ bool Actor::IsPartyMember() const
 {
 	if (Modified[IE_EA]<=EA_FAMILIAR) return true;
 	return InParty>0;
+}
+
+void Actor::ResetCommentTime()
+{
+	Game *game = core->GetGame();
+	nextBored = game->GameTime + core->Roll(1, 30, bored_time);
+	nextComment = game->GameTime + core->Roll(5, 1000, bored_time/2);
 }

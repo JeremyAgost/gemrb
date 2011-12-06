@@ -39,7 +39,7 @@
 #include <cassert>
 #include <cstdio>
 
-#ifdef TARGET_OS_IPHONE
+#if TARGET_OS_IPHONE
 extern "C" {
 	#include "SDL_sysvideo.h"
 	#include "SDL_uikitkeyboard.h"
@@ -393,7 +393,7 @@ int SDLVideoDriver::PollEvents() {
 					key = GEM_RIGHT;
 					break;
 				case SDLK_DELETE:
-#ifndef TARGET_OS_IPHONE
+#if TARGET_OS_IPHONE < 1
 					//iOS currently doesnt have a backspace so we use delete. 
 					//This change should be future proof in the event apple changes the delete key to a backspace.
 					key = GEM_DELETE;
@@ -463,8 +463,10 @@ int SDLVideoDriver::PollEvents() {
 			MouseMovement(event.motion.x, event.motion.y);
 			break;
 		case SDL_MOUSEBUTTONDOWN:
-			// ???: We may need a check to exclude mousewheel buttons on SDL 1.3+
-			// otherwise we may get a double scroll.
+			// exclude mousewheel buttons on SDL 1.3+ otherwise we get a double scroll due to SDL_MOUSEWHEEL.
+#if SDL_VERSION_ATLEAST(1,3,0)
+			if (event.button.button == SDL_BUTTON_WHEELDOWN || event.button.button == SDL_BUTTON_WHEELUP) break;
+#endif
 			if ((DisableMouse & MOUSE_DISABLED) || !Evnt)
 				break;
 			ignoreNextMouseUp = false;
@@ -483,6 +485,10 @@ int SDLVideoDriver::PollEvents() {
 			break;
 
 		case SDL_MOUSEBUTTONUP:
+			// exclude mousewheel buttons on SDL 1.3+ otherwise we get a double scroll due to SDL_MOUSEWHEEL.
+#if SDL_VERSION_ATLEAST(1,3,0)
+			if (event.button.button == SDL_BUTTON_WHEELDOWN || event.button.button == SDL_BUTTON_WHEELUP) break;
+#endif
 			lastevent = false;
 			if ((DisableMouse & MOUSE_DISABLED) || !Evnt || ignoreNextMouseUp)
 				break;
@@ -508,9 +514,9 @@ int SDLVideoDriver::PollEvents() {
 #if SDL_VERSION_ATLEAST(1,3,0)
 		case SDL_MOUSEWHEEL://SDL 1.3+
 			short scrollX;
-			scrollX= event.wheel.x;
+			scrollX= event.wheel.x * -1;
 			short scrollY;
-			scrollY= event.wheel.y;
+			scrollY= event.wheel.y * -1;
 			Evnt->MouseWheelScroll( scrollX, scrollY );
 			break;
 		case SDL_FINGERMOTION://SDL 1.3+
@@ -641,9 +647,8 @@ This method is intended for devices with no physical keyboard or with an optiona
 */
 void SDLVideoDriver::HideSoftKeyboard()
 {
-
 	if(core->UseSoftKeyboard){
-#ifdef TARGET_OS_IPHONE
+#if TARGET_OS_IPHONE
 		SDL_iPhoneKeyboardHide(SDL_GetFocusWindow());
 #endif
 #ifdef ANDROID
@@ -660,7 +665,7 @@ This method is intended for devices with no physical keyboard or with an optiona
 void SDLVideoDriver::ShowSoftKeyboard()
 {
 	if(core->UseSoftKeyboard){
-#ifdef TARGET_OS_IPHONE
+#if TARGET_OS_IPHONE
 		SDL_iPhoneKeyboardShow(SDL_GetFocusWindow());
 #endif
 #ifdef ANDROID
@@ -769,7 +774,7 @@ Sprite2D* SDLVideoDriver::CreateSprite(int w, int h, int bpp, ieDword rMask,
 		SDL_SetColorKey( ( SDL_Surface * ) p, SDL_SRCCOLORKEY | SDL_RLEACCEL,
 			index );
 	}
-	return new Sprite2D(w, h, bpp, p->pitch, p, pixels);
+	return new Sprite2D(w, h, bpp, p, pixels);
 }
 
 Sprite2D* SDLVideoDriver::CreateSprite8(int w, int h, int bpp, void* pixels,
@@ -786,7 +791,7 @@ Sprite2D* SDLVideoDriver::CreateSprite8(int w, int h, int bpp, void* pixels,
 	if (cK) {
 		SDL_SetColorKey( ( SDL_Surface * ) p, SDL_SRCCOLORKEY, index );
 	}
-	return new Sprite2D(w, h, bpp, p->pitch, p, pixels);
+	return new Sprite2D(w, h, bpp, p, pixels);
 }
 
 Sprite2D* SDLVideoDriver::CreateSpriteBAM8(int w, int h, bool rle,
@@ -805,7 +810,7 @@ Sprite2D* SDLVideoDriver::CreateSpriteBAM8(int w, int h, bool rle,
 	data->source = datasrc;
 	datasrc->IncDataRefCount();
 
-	Sprite2D* spr = new Sprite2D(w, h, 8 /* FIXME!!!! */, w, data, pixeldata);
+	Sprite2D* spr = new Sprite2D(w, h, 8 /* FIXME!!!! */, data, pixeldata);
 	spr->BAM = true;
 	return spr;
 }
@@ -2625,7 +2630,7 @@ void SDLVideoDriver::ClickMouse(unsigned int button)
 	}
 }
 
-void SDLVideoDriver::MouseClickEvent(Uint8 type, Uint8 button)
+void SDLVideoDriver::MouseClickEvent(SDL_EventType type, Uint8 button)
 {
 	SDL_Event *event = new SDL_Event();
 	event->type = type;

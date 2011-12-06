@@ -187,7 +187,6 @@ Interface::Interface(int iargc, char* iargv[])
 #else
 	CaseSensitive = false;
 #endif
-	SlowBIFs = false;
 	SkipIntroVideos = false;
 	DrawFPS = false;
 	TouchScrollAreas = false;
@@ -198,6 +197,7 @@ Interface::Interface(int iargc, char* iargv[])
 	NumFingScroll = 2;
 	TooltipDelay = 100;
 	IgnoreOriginalINI = 0;
+	Bpp = 32;
 	FullScreen = 0;
 	GUIScriptsPath[0] = 0;
 	GamePath[0] = 0;
@@ -851,6 +851,11 @@ int Interface::CheckSpecialSpell(const ieResRef resref, Actor *actor)
 		if (!(sp&SP_SILENCE)) {
 			return SP_SILENCE;
 		}
+	}
+
+	// disable spells causing surges to be cast while in a surge (prevents nesting)
+	if (sp&SP_SURGE) {
+		return SP_SURGE;
 	}
 
 	return 0;
@@ -2135,6 +2140,10 @@ bool Interface::LoadConfig(void)
 	if (s) {
 		strcpy( UserDir, s );
 		strcat( UserDir, "/."PACKAGE"/" );
+#if TARGET_OS_IPHONE
+		//we are in both a sandbox and a bundle
+		strcat( UserDir, "/"PACKAGE".app/");
+#endif
 	} else {
 		strcpy( UserDir, "./" );
 	}
@@ -2283,7 +2292,6 @@ bool Interface::LoadConfig(const char* filename)
 		CONFIG_INT("FullScreen", FullScreen = );
 		CONFIG_INT("GUIEnhancements", GUIEnhancements = );
 		CONFIG_INT("TouchScrollAreas", TouchScrollAreas = );
-		CONFIG_INT("SlowBIFs", SlowBIFs = );
 		CONFIG_INT("Height", Height = );
 		CONFIG_INT("KeepCache", KeepCache = );
 		CONFIG_INT("MultipleQuickSaves", MultipleQuickSaves = );
@@ -3184,9 +3192,14 @@ int Interface::SetControlStatus(unsigned short WindowIndex,
 	if (Status&IE_GUI_CONTROL_FOCUSED) {
 		evntmgr->SetFocused( win, ctrl);
 	}
-	if (ctrl->ControlType != ((Status >> 24) & 0xff) ) {
+
+	//check if the status parameter was intended to use with this control
+	//Focus will sadly break this at the moment, because it is common for all control types
+	int check = (Status >> 24) & 0xff;
+	if ( (check!=0x7f) && (ctrl->ControlType != check) ) {
 		return -2;
 	}
+
 	switch (ctrl->ControlType) {
 		case IE_GUI_BUTTON:
 			//Button
@@ -3876,7 +3889,7 @@ void Interface::SetCutSceneMode(bool active)
 bool Interface::InCutSceneMode() const
 {
 	GameControl *gc = GetGameControl();
-	if (!gc || (gc->GetDialogueFlags()&DF_IN_DIALOG) || (gc->GetScreenFlags()&SF_DISABLEMOUSE) ) {
+	if (!gc || (gc->GetDialogueFlags()&DF_IN_DIALOG) || (gc->GetScreenFlags()&(SF_DISABLEMOUSE|SF_CUTSCENE))) {
 		return true;
 	}
 	return false;

@@ -19,10 +19,12 @@
 
 import GemRB
 import GUICommon
+import Spellbook
 from GUIDefines import *
 from ie_stats import *
 from ie_slots import *
 from ie_spells import *
+from ie_sounds import DEF_IDENTIFY
 
 OverSlot = None
 UsedSlot = None
@@ -366,10 +368,7 @@ def OpenItemInfoWindow ():
 		slot_item = GemRB.GetSlotItem (pc, slot)
 	item = GemRB.GetItem (slot_item["ItemResRef"])
 
-	#auto identify when lore is high enough
-	if item["LoreToID"]<=GemRB.GetPlayerStat (pc, IE_LORE):
-		GemRB.ChangeItemFlag (pc, slot, IE_INV_ITEM_IDENTIFIED, OP_OR)
-		slot_item["Flags"] |= IE_INV_ITEM_IDENTIFIED
+	if TryAutoIdentification(pc, item, slot, slot_item, True):
 		GUIINV.UpdateInventoryWindow ()
 
 	if slot_item["Flags"] & IE_INV_ITEM_IDENTIFIED:
@@ -378,6 +377,14 @@ def OpenItemInfoWindow ():
 		value = 3
 	DisplayItem (slot_item["ItemResRef"], value)
 	return
+
+#auto identify when lore is high enough
+def TryAutoIdentification(pc, item, slot, slot_item, enabled=0):
+	if enabled and item["LoreToID"]<=GemRB.GetPlayerStat (pc, IE_LORE):
+		GemRB.ChangeItemFlag (pc, slot, IE_INV_ITEM_IDENTIFIED, OP_OR)
+		slot_item["Flags"] |= IE_INV_ITEM_IDENTIFIED
+		return True
+	return False
 
 def OpenGroundItemInfoWindow ():
 	global ItemInfoWindow
@@ -498,6 +505,12 @@ def UpdateSlot (pc, slot):
 
 	Button.SetEvent (IE_GUI_BUTTON_ON_DRAG_DROP, OnDragItem)
 	Button.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_NAND)
+
+	# characters should auto-identify any item they recieve
+	if slot_item:
+		item = GemRB.GetItem (slot_item["ItemResRef"])
+		TryAutoIdentification(pc, item, slot+1, slot_item, GemRB.GetVar("GUIEnhancements")&GE_TRY_IDENTIFY_ON_TRANSFER)
+
 	GUICommon.UpdateInventorySlot (pc, Button, slot_item, "inventory", SlotType["Type"]&SLOT_INVENTORY == 0)
 
 	if slot_item:
@@ -686,7 +699,7 @@ def ReadItemWindow ():
 
 	pc = GemRB.GameGetSelectedPCSingle ()
 	slot = GemRB.GetVar ("ItemButton")
-	ret = GUICommon.CannotLearnSlotSpell()
+	ret = Spellbook.CannotLearnSlotSpell()
 
 	if ret:
 		# couldn't find any strrefs for the other undhandled values (stat, level)
@@ -730,7 +743,7 @@ def DelayedReadItemWindow ():
 	global level, spell_ref
 
 	pc = GemRB.GameGetSelectedPCSingle ()
-	if GUICommon.HasSpell (pc, IE_SPELL_TYPE_WIZARD, level, spell_ref):
+	if Spellbook.HasSpell (pc, IE_SPELL_TYPE_WIZARD, level, spell_ref):
 		strref = 10830
 	else:
 		ret = LSR_FAILED

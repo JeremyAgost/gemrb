@@ -437,7 +437,8 @@ void Scriptable::AddAction(Action* aC)
 
 	// attempt to handle 'instant' actions, from instant.ids, which run immediately
 	// when added if the action queue is empty, even on actors which are Held/etc
-	if (!CurrentAction && !GetNextAction()) {
+	// FIXME: area check hack until fuzzie fixes scripts here
+	if (!CurrentAction && !GetNextAction() && area) {
 		if (actionflags[aC->actionID] & AF_INSTANT) {
 			CurrentAction = aC;
 			GameScript::ExecuteAction( this, CurrentAction );
@@ -1147,7 +1148,7 @@ int Scriptable::SpellCast(bool instant)
 		//cfb
 		EffectQueue *fxqueue = spl->GetEffectBlock(this, this->Pos, -1, level);
 		fxqueue->SetOwner(actor);
-		if (!actor->Modified[IE_AVATARREMOVAL]) {
+		if (!(actor->Modified[IE_AVATARREMOVAL] || instant)) {
 			spl->AddCastingGlow(fxqueue, duration, actor->Modified[IE_SEX]);
 		}
 		fxqueue->AddAllEffects(actor, actor->Pos);
@@ -1158,6 +1159,7 @@ int Scriptable::SpellCast(bool instant)
 			// we have to remove it manually
 			actor->fxqueue.RemoveAllEffectsWithParam(fx_force_surge_modifier_ref, 1);
 		}
+		actor->ResetCommentTime();
 	}
 
 	gamedata->FreeSpell(spl, SpellResRef, false);
@@ -1824,6 +1826,24 @@ void AdjustPositionTowards(Point &Pos, ieDword time_diff, unsigned int walk_spee
 			( ( ( Pos.y - ( ( desty * 12 ) + 6 ) ) * ( time_diff ) ) / walk_speed );
 }
 
+unsigned char Movable::GetNextFace()
+{
+	//slow turning
+	if (timeStartStep==core->GetGame()->Ticks) {
+		return Orientation;
+	}
+	if (Orientation != NewOrientation) {
+		if ( ( (NewOrientation-Orientation) & (MAX_ORIENT-1) ) <= MAX_ORIENT/2) {
+			Orientation++;
+		} else {
+			Orientation--;
+		}
+		Orientation = Orientation&(MAX_ORIENT-1);
+	}
+
+	return Orientation;
+}
+
 // returns whether we made all pending steps (so, false if we must be called again this tick)
 // we can't just do them all here because the caller might have to update searchmap etc
 bool Movable::DoStep(unsigned int walk_speed, ieDword time)
@@ -1846,7 +1866,7 @@ bool Movable::DoStep(unsigned int walk_speed, ieDword time)
 		step = step->Next;
 		timeStartStep = timeStartStep + walk_speed;
 	}
-	SetOrientation (step->orient, false);
+	SetOrientation (step->orient, true);
 	StanceID = IE_ANI_WALK;
 	if ((Type == ST_ACTOR) && (InternalFlags & IF_RUNNING)) {
 		StanceID = IE_ANI_RUN;

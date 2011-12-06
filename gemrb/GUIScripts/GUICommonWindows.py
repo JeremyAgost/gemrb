@@ -24,21 +24,26 @@
 
 import GemRB
 from GUIDefines import *
-from ie_stats import IE_STATE_ID, STATE_DEAD
+from ie_stats import *
 from ie_modal import *
 from ie_action import *
 import GUICommon
 import CommonTables
 import LUCommon
 import InventoryCommon
+import Spellbook
 
 # needed for all the Open*Window callbacks in the OptionsWindow
 import GUIJRNL
 import GUIMA
-import GUIMG
 import GUIINV
 import GUIOPT
-import GUIPR
+if GUICommon.GameIsIWD2():
+	# one spellbook for all spell types
+	import GUISPL
+else:
+	import GUIMG
+	import GUIPR
 import GUIREC
 
 FRAME_PC_SELECTED = 0
@@ -48,80 +53,112 @@ PortraitWindow = None
 OptionsWindow = None
 ActionsWindow = None
 DraggedPortrait = None
+ActionBarControlOffset = 0
 
 def SetupMenuWindowControls (Window, Gears, ReturnToGame):
 	"""Sets up all of the basic control windows."""
 
-	global OptionsWindow
+	global OptionsWindow, ActionBarControlOffset
 
 	OptionsWindow = Window
+	# FIXME: add "(key)" to tooltips!
+
+	if GUICommon.GameIsIWD2():
+		ActionBarControlOffset = 6
+		SetupIWD2WindowControls (Window, Gears, ReturnToGame)
+		return
+
 	# Return to Game
 	Button = Window.GetControl (0)
 	Button.SetTooltip (16313)
 	Button.SetVarAssoc ("SelectedWindow", 0)
 	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, ReturnToGame)
 	Button.SetFlags (IE_GUI_BUTTON_CANCEL, OP_OR)
+	if GUICommon.GameIsBG1():
+		# enabled BAM isn't present in .chu, defining it here
+		Button.SetSprites ("GUILSOP", 0,16,17,28,16)
 
 	# Map
 	Button = Window.GetControl (1)
 	Button.SetTooltip (16310)
 	Button.SetVarAssoc ("SelectedWindow", 1)
 	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIMA.OpenMapWindow)
+	if GUICommon.GameIsBG1():
+		Button.SetSprites ("GUILSOP", 0,0,1,20,0)
 
 	# Journal
 	Button = Window.GetControl (2)
 	Button.SetTooltip (16308)
 	Button.SetVarAssoc ("SelectedWindow", 2)
 	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIJRNL.OpenJournalWindow)
+	if GUICommon.GameIsBG1():
+		Button.SetSprites ("GUILSOP", 0,4,5,22,4)
 
 	# Inventory
 	Button = Window.GetControl (3)
 	Button.SetTooltip (16307)
 	Button.SetVarAssoc ("SelectedWindow", 3)
 	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIINV.OpenInventoryWindow)
+	if GUICommon.GameIsBG1():
+		Button.SetSprites ("GUILSOP", 0,2,3,21,2)
 
 	# Records
 	Button = Window.GetControl (4)
 	Button.SetTooltip (16306)
 	Button.SetVarAssoc ("SelectedWindow", 4)
 	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIREC.OpenRecordsWindow)
+	if GUICommon.GameIsBG1():
+		Button.SetSprites ("GUILSOP", 0,6,7,23,6)
 
 	# Mage
 	Button = Window.GetControl (5)
 	Button.SetTooltip (16309)
 	Button.SetVarAssoc ("SelectedWindow", 5)
 	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIMG.OpenMageWindow)
+	if GUICommon.GameIsBG1():
+		Button.SetSprites ("GUILSOP", 0,8,9,24,8)
 
 	# Priest
 	Button = Window.GetControl (6)
 	Button.SetTooltip (14930)
 	Button.SetVarAssoc ("SelectedWindow", 6)
 	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIPR.OpenPriestWindow)
+	if GUICommon.GameIsBG1():
+		Button.SetSprites ("GUILSOP", 0,10,11,25,10)
 
 	# Options
 	Button = Window.GetControl (7)
 	Button.SetTooltip (16311)
 	Button.SetVarAssoc ("SelectedWindow", 7)
 	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIOPT.OpenOptionsWindow)
+	if GUICommon.GameIsBG1():
+		Button.SetSprites ("GUILSOP", 0,12,13,26,12)
 
-	# Multi player team setup?
+	# Party mgmt
 	Button = Window.GetControl (8)
-	Button.SetTooltip (13902)
+	Button.SetTooltip (16312)
+	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, None) #TODO: OpenPartyWindow
 
+	# pause button
 	if Gears:
 		# Pendulum, gears, sun/moon dial (time)
 		# FIXME: display all animations: CPEN, CGEAR, CDIAL
+		if GUICommon.HasHOW(): # how doesn't have this in the right place
+			pos = GemRB.GetSystemVariable (SV_HEIGHT)-71
+			Window.CreateButton (9, 6, pos, 64, 71)
 		Button = Window.GetControl (9)
-		Label = Button.CreateLabelOnButton (0x10000009, "NORMAL", 0)
+		if GUICommon.GameIsBG2():
+			Label = Button.CreateLabelOnButton (0x10000009, "NORMAL", 0)
+			Label.SetAnimation ("CPEN")
 
-		Label.SetAnimation ("CPEN")
 		Button.SetAnimation ("CGEAR")
-		Button.SetBAM ("CDIAL", 0, 0)
+		if GUICommon.GameIsBG2():
+			Button.SetBAM ("CDIAL", 0, 0)
 		Button.SetState (IE_GUI_BUTTON_ENABLED)
 		Button.SetFlags (IE_GUI_BUTTON_PICTURE|IE_GUI_BUTTON_ANIMATED|IE_GUI_BUTTON_NORMAL, OP_SET)
 		Button.SetEvent(IE_GUI_BUTTON_ON_PRESS, GUICommon.GearsClicked)
 		GUICommon.SetGamedaysAndHourToken()
-		Button.SetTooltip(16041)
+		Button.SetTooltip(GemRB.GetString (16041))
 		rb = 11
 	else:
 		rb = 9
@@ -132,8 +169,76 @@ def SetupMenuWindowControls (Window, Gears, ReturnToGame):
 		Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUICommon.RestPress)
 		Button.SetTooltip (11942)
 
+	MarkMenuButton (Window)
+
 	if PortraitWindow:
 		UpdatePortraitWindow ()
+	return
+
+def SetupIWD2WindowControls (Window, Gears, ReturnToGame):
+	"""Sets up all of the basic iwd2 control windows."""
+
+	global OptionsWindow
+
+	OptionsWindow = Window
+	#Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, ReturnToGame)
+
+	# Spellbook
+	Button = Window.GetControl (4)
+	Button.SetTooltip (16309)
+	Button.SetVarAssoc ("SelectedWindow", 0)
+	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUISPL.OpenSpellBookWindow)
+
+	# Inventory
+	Button = Window.GetControl (5)
+	Button.SetTooltip (16307)
+	Button.SetVarAssoc ("SelectedWindow", 1)
+	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIINV.OpenInventoryWindow)
+
+	# Journal
+	Button = Window.GetControl (6)
+	Button.SetTooltip (16308)
+	Button.SetVarAssoc ("SelectedWindow", 2)
+	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIJRNL.OpenJournalWindow)
+
+	# Map
+	Button = Window.GetControl (7)
+	Button.SetTooltip (16310)
+	Button.SetVarAssoc ("SelectedWindow", 3)
+	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIMA.OpenMapWindow)
+
+	# Records
+	Button = Window.GetControl (8)
+	Button.SetTooltip (16306)
+	Button.SetVarAssoc ("SelectedWindow", 4)
+	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIREC.OpenRecordsWindow)
+
+	# Options
+	Button = Window.GetControl (9)
+	Button.SetTooltip (16311)
+	Button.SetVarAssoc ("SelectedWindow", 7)
+	Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUIOPT.OpenOptionsWindow)
+
+	# Gears
+	Button = Window.GetControl (10)
+	Button.SetAnimation ("CGEAR")
+	Button.SetFlags (IE_GUI_BUTTON_PICTURE | IE_GUI_BUTTON_ANIMATED, OP_SET)
+	Button.SetState (IE_GUI_BUTTON_LOCKED)
+
+	if Gears:
+		# Select All
+		Button = Window.GetControl (11)
+		Button.SetTooltip (10485)
+		Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUICommon.SelectAllOnPress)
+		# Rest
+		Button = Window.GetControl (12)
+		Button.SetTooltip (11942)
+		Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUICommon.RestPress)
+
+		# Character Arbitration
+		Button = Window.GetControl (13)
+		Button.SetTooltip (16312)
+		Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, None) #TODO: CharacterWindow
 	return
 
 def MarkMenuButton (WindowIndex):
@@ -143,8 +248,12 @@ def MarkMenuButton (WindowIndex):
 		Button = WindowIndex.GetControl (button)
 		Button.SetState (IE_GUI_BUTTON_ENABLED)
 
-	if Pressed: # don't draw the selection when returning to the game
-		Pressed.SetState (IE_GUI_BUTTON_SELECTED)
+	if Pressed:
+		Button = Pressed
+	else: # highlight return to game
+		Button = WindowIndex.GetControl (0)
+	Button.SetState (IE_GUI_BUTTON_SELECTED)
+
 	return
 
 def OptionsPress ():
@@ -168,7 +277,7 @@ def PortraitPress ():
 def AIPress ():
 	"""Toggles the party AI."""
 
-	Button = PortraitWindow.GetControl (6)
+	Button = PortraitWindow.GetControl (ActionBarControlOffset)
 	AI = GemRB.GetMessageWindowSize () & GS_PARTYAI
 
 	if AI:
@@ -186,17 +295,22 @@ def AIPress ():
 
 def EmptyControls ():
 	global ActionsWindow
+	if GUICommon.GameIsIWD2():
+		global PortraitWindow
+		Window = PortraitWindow
+	else:
+		global ActionsWindow
+		Window = ActionsWindow
 
 	Selected = GemRB.GetSelectedSize()
 	if Selected==1:
 		pc = GemRB.GameGetFirstSelectedActor ()
 		#init spell list
-		GemRB.SpellCast (pc, -1, 0, 1)
+		GemRB.SpellCast (pc, -1, 0)
 
 	GemRB.SetVar ("ActionLevel", 0)
-	Window = ActionsWindow
 	for i in range (12):
-		Button = Window.GetControl (i)
+		Button = Window.GetControl (i+ActionBarControlOffset)
 		Button.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_SET)
 		Button.SetPicture ("")
 		Button.SetText ("")
@@ -211,11 +325,15 @@ def SelectFormationPreset ():
 
 def SetupFormation ():
 	"""Opens the formation selection section."""
-	global ActionsWindow
+	if GUICommon.GameIsIWD2():
+		global PortraitWindow
+		Window = PortraitWindow
+	else:
+		global ActionsWindow
+		Window = ActionsWindow
 
-	Window = ActionsWindow
 	for i in range (12):
-		Button = Window.GetControl (i)
+		Button = Window.GetControl (i+ActionBarControlOffset)
 		Button.SetFlags (IE_GUI_BUTTON_NORMAL, OP_SET)
 		Button.SetSprites ("GUIBTBUT",0,0,1,2,3)
 		Button.SetBAM ("FORM%x"%i,0,0,-1)
@@ -226,30 +344,38 @@ def SetupFormation ():
 def GroupControls ():
 	"""Sections that control group actions."""
 
-	global ActionsWindow
+	if GUICommon.GameIsIWD2():
+		global PortraitWindow
+		Window = PortraitWindow
+	else:
+		global ActionsWindow
+		Window = ActionsWindow
 
 	GemRB.SetVar ("ActionLevel", 0)
-	Window = ActionsWindow
-	Button = Window.GetControl (0)
+	Button = Window.GetControl (ActionBarControlOffset)
+	if GUICommon.GameIsBG2(): # no guard icon
+		Button.SetActionIcon (globals(), -1)
+	else:
+		Button.SetActionIcon (globals(), 14)
+	Button = Window.GetControl (1+ActionBarControlOffset)
 	Button.SetActionIcon (globals(), 7)
-	Button = Window.GetControl (1)
+	Button = Window.GetControl (2+ActionBarControlOffset)
 	Button.SetActionIcon (globals(), 15)
-	Button = Window.GetControl (2)
+	Button = Window.GetControl (3+ActionBarControlOffset)
 	Button.SetActionIcon (globals(), 21)
-	Button = Window.GetControl (3)
+	Button = Window.GetControl (4+ActionBarControlOffset)
 	Button.SetActionIcon (globals(), -1)
-	Button = Window.GetControl (4)
+	Button = Window.GetControl (5+ActionBarControlOffset)
 	Button.SetActionIcon (globals(), -1)
-	Button = Window.GetControl (5)
-	Button.SetActionIcon (globals(), -1)
-	Button = Window.GetControl (6)
+	Button = Window.GetControl (6+ActionBarControlOffset)
 	Button.SetActionIcon (globals(), -1)
 	GemRB.SetVar ("Formation", GemRB.GameGetFormation ())
 	for i in range (5):
-		Button = Window.GetControl (7+i)
+		Button = Window.GetControl (7+ActionBarControlOffset+i)
 		Button.SetState (IE_GUI_BUTTON_ENABLED)
 		idx = GemRB.GameGetFormation (i)
 		Button.SetFlags (IE_GUI_BUTTON_RADIOBUTTON|IE_GUI_BUTTON_NORMAL, OP_SET)
+		# kill the previous sprites or they show through
 		Button.SetSprites ("GUIBTBUT",0,0,1,2,3)
 		Button.SetBAM ("FORM%x"%idx,0,0,-1)
 		Button.SetVarAssoc ("Formation", i)
@@ -278,7 +404,7 @@ def OpenActionsWindowControls (Window):
 	Button.SetFlags (IE_GUI_BUTTON_PICTURE|IE_GUI_BUTTON_ANIMATED|IE_GUI_BUTTON_NORMAL, OP_SET)
 	Button.SetEvent(IE_GUI_BUTTON_ON_PRESS, GUICommon.GearsClicked)
 	GUICommon.SetGamedaysAndHourToken()
-	Button.SetTooltip(16041)
+	Button.SetTooltip(GemRB.GetString (16041))
 	UpdateActionsWindow ()
 	return
 
@@ -286,14 +412,14 @@ def SelectItemAbility():
 	pc = GemRB.GameGetFirstSelectedActor ()
 	slot = GemRB.GetVar ("Slot")
 	ability = GemRB.GetVar ("Ability")
-	GemRB.SetupQuickSlot (pc, 0, slot, ability, 1)
+	GemRB.SetupQuickSlot (pc, 0, slot, ability)
 	GemRB.SetVar ("ActionLevel", 0)
 	return
 
 def SetupItemAbilities(pc, slot):
 	Window = ActionsWindow
 
-	slot_item = GemRB.GetSlotItem(pc, slot, 1)
+	slot_item = GemRB.GetSlotItem(pc, slot)
 	if not slot_item:
 		# empty quickslot
 		return
@@ -321,28 +447,48 @@ def UpdateActionsWindow ():
 	global ActionsWindow, PortraitWindow, OptionsWindow
 	global level, TopIndex
 
-	if ActionsWindow == -1:
+	if GUICommon.GameIsIWD2():
+		Window = PortraitWindow
+	else:
+		Window = ActionsWindow
+
+	if Window == -1:
 		return
 
-	if ActionsWindow == None:
+	if Window == None:
 		return
 
 	#fully redraw the side panes to cover the actions window
 	#do this only when there is no 'otherwindow'
-	if GemRB.GetVar ("OtherWindow") == -1:
-		if PortraitWindow:
-			PortraitWindow.Invalidate ()
-		if OptionsWindow:
-			OptionsWindow.Invalidate ()
+	if GUICommon.GameIsIWD2():
+		if GemRB.GetVar ("OtherWindow") != -1:
+			return
+	else:
+		GUICommon.SetGamedaysAndHourToken()
+		if OptionsWindow and OptionsWindow.HasControl (9):
+			Button = OptionsWindow.GetControl (9)
+			Button.SetTooltip (GemRB.GetString (16041)) # refetch the string, since the tokens changed
+		elif ActionsWindow and ActionsWindow.HasControl (62):
+			Button = ActionsWindow.GetControl (62)
+			Button.SetTooltip (GemRB.GetString (16041))
+
+		if GemRB.GetVar ("OtherWindow") == -1:
+			if PortraitWindow:
+				PortraitWindow.Invalidate ()
+			if OptionsWindow:
+				OptionsWindow.Invalidate ()
 
 	Selected = GemRB.GetSelectedSize()
 
 	#setting up the disabled button overlay (using the second border slot)
-	for i in range (12):
-		Button = ActionsWindow.GetControl (i)
-		Button.SetBorder (1, 0, 0, 0, 0, 50,30,10,120, 0, 1)
-		Button.SetFont ("NUMBER")
-		Button.SetText ("")
+	if not GUICommon.GameIsIWD2():
+		for i in range (12):
+			Button = Window.GetControl (i)
+			if GUICommon.GameIsBG1():
+				Button.SetBorder (0,6,6,4,4,0,254,0,255)
+			Button.SetBorder (1, 0, 0, 0, 0, 50,30,10,120, 0, 1)
+			Button.SetFont ("NUMBER")
+			Button.SetText ("")
 
 	if Selected == 0:
 		EmptyControls ()
@@ -358,36 +504,44 @@ def UpdateActionsWindow ():
 	TopIndex = GemRB.GetVar ("TopIndex")
 	if level == 0:
 		#this is based on class
-		ActionsWindow.SetupControls (globals(), pc, 0, 1)
+		Window.SetupControls (globals(), pc, ActionBarControlOffset)
 	elif level == 1:
-		ActionsWindow.SetupEquipmentIcons(globals(), pc, TopIndex, 0, 1)
+		Window.SetupEquipmentIcons(globals(), pc, TopIndex, ActionBarControlOffset)
 	elif level == 2: #spells
 		GemRB.SetVar ("Type", 3)
-		ActionsWindow.SetupSpellIcons(globals(), pc, 3, TopIndex, 0, 1)
+		Spellbook.SetupSpellIcons(Window, 3, TopIndex, ActionBarControlOffset)
 	elif level == 3: #innates
 		GemRB.SetVar ("Type", 4)
-		ActionsWindow.SetupSpellIcons(globals(), pc, 4, TopIndex, 0, 1)
+		Spellbook.SetupSpellIcons(Window, 4, TopIndex, ActionBarControlOffset)
 	elif level == 4: #quick weapon/item ability selection
 		SetupItemAbilities(pc, GemRB.GetVar("Slot") )
 	elif level == 5: #all known mage spells
 		GemRB.SetVar ("Type", -1)
-		ActionsWindow.SetupSpellIcons(globals(), pc, -1, TopIndex, 0, 1)
+		Spellbook.SetupSpellIcons(Window, -1, TopIndex, ActionBarControlOffset)
+	elif level == 6: # iwd2 skills
+		print "IWD2 skill selection is not implemented yet, ignoring!\n\n"
+	elif level == 7: # quickspells, but with innates too
+		GemRB.SetVar ("Type", 7)
+		Spellbook.SetupSpellIcons(Window, 7, TopIndex, ActionBarControlOffset)
 	return
 
 def ActionQWeaponPressed (which):
 	"""Selects the given quickslot weapon if possible."""
 
 	pc = GemRB.GameGetFirstSelectedActor ()
-	qs = GemRB.GetEquippedQuickSlot (pc, 1, 1)
+	qs = GemRB.GetEquippedQuickSlot (pc, 1)
 
 	#38 is the magic slot
 	if ((qs==which) or (qs==38)) and GemRB.GameControlGetTargetMode() != TARGET_MODE_ATTACK:
 		GemRB.GameControlSetTargetMode (TARGET_MODE_ATTACK, GA_NO_DEAD|GA_NO_SELF|GA_NO_HIDDEN)
 	else:
 		GemRB.GameControlSetTargetMode (TARGET_MODE_NONE)
-		GemRB.SetEquippedQuickSlot (pc, which, -1, 1)
+		GemRB.SetEquippedQuickSlot (pc, which, -1)
 
-	ActionsWindow.SetupControls (globals(), pc, 0, 1)
+	if GUICommon.GameIsIWD2():
+		PortraitWindow.SetupControls (globals(), pc, ActionBarControlOffset)
+	else:
+		ActionsWindow.SetupControls (globals(), pc, ActionBarControlOffset)
 	UpdateActionsWindow ()
 	return
 
@@ -406,7 +560,7 @@ def ActionQWeapon4Pressed ():
 def ActionQSpellPressed (which):
 	pc = GemRB.GameGetFirstSelectedActor ()
 
-	GemRB.SpellCast (pc, -2, which, 1)
+	GemRB.SpellCast (pc, -2, which)
 	UpdateActionsWindow ()
 	return
 
@@ -422,7 +576,7 @@ def ActionQSpell3Pressed ():
 def ActionQSpellRightPressed (which):
 	GemRB.SetVar ("QSpell", which)
 	GemRB.SetVar ("TopIndex", 0)
-	GemRB.SetVar ("ActionLevel", 2)
+	GemRB.SetVar ("ActionLevel", 7)
 	UpdateActionsWindow ()
 	return
 
@@ -434,6 +588,10 @@ def ActionQSpell2RightPressed ():
 
 def ActionQSpell3RightPressed ():
 	ActionQSpellRightPressed(2)
+
+# can't pass the globals dictionary from another module
+def SetActionIconWorkaround(Button, action, function):
+	Button.SetActionIcon (globals(), action, function)
 
 #no check needed because the button wouldn't be drawn if illegal
 def ActionLeftPressed ():
@@ -461,10 +619,15 @@ def ActionRightPressed ():
 	Type = GemRB.GetVar ("Type")
 	#Type is a bitfield if there is no level given
 	#This is to make sure cleric/mages get all spells listed
-	if Type&128:
-		Max = GemRB.GetKnownSpellsCount(pc, Type&127, -1, 1, 1)
+	if Type&128 or GemRB.GetVar ("ActionLevel") == 5:
+		#Max = GemRB.GetKnownSpellsCount(pc, Type&127, -1)
+		tmpType = Type&127
+		if tmpType == 3:
+			Max = len(Spellbook.GetKnownSpells (pc, IE_SPELL_TYPE_PRIEST) + Spellbook.GetKnownSpells (pc, IE_SPELL_TYPE_WIZARD))
+		else:
+			Max = len(Spellbook.GetKnownSpells (pc, tmpType))
 	else:
-		Max = GemRB.GetMemorizedSpellsCount(pc, Type, -1, 1, 1)
+		Max = GemRB.GetMemorizedSpellsCount(pc, Type, -1, 1)
 	TopIndex += 10
 	if TopIndex > Max - 10:
 		if Max>10:
@@ -495,7 +658,7 @@ def ActionBardSongPressed ():
 	##FIXME: check if the actor can actually switch to this state
 	#get the global ID
 	pc = GemRB.GameGetFirstSelectedActor ()
-	GemRB.SetModalState (pc, MS_BATTLESONG, 1)
+	GemRB.SetModalState (pc, MS_BATTLESONG)
 	GemRB.PlaySound ("act_01")
 	UpdateActionsWindow ()
 	return
@@ -506,14 +669,14 @@ def ActionSearchPressed ():
 	##FIXME: check if the actor can actually switch to this state
 	#get the global ID
 	pc = GemRB.GameGetFirstSelectedActor ()
-	GemRB.SetModalState (pc, MS_DETECTTRAPS, 1)
+	GemRB.SetModalState (pc, MS_DETECTTRAPS)
 	UpdateActionsWindow ()
 	return
 
 def ActionStealthPressed ():
 	"""Toggles stealth."""
 	pc = GemRB.GameGetFirstSelectedActor ()
-	GemRB.SetModalState (pc, MS_STEALTH, 1)
+	GemRB.SetModalState (pc, MS_STEALTH)
 	GemRB.PlaySound ("act_07")
 	UpdateActionsWindow ()
 	return
@@ -521,7 +684,7 @@ def ActionStealthPressed ():
 def ActionTurnPressed ():
 	"""Toggles turn undead."""
 	pc = GemRB.GameGetFirstSelectedActor ()
-	GemRB.SetModalState (pc, MS_TURNUNDEAD, 1)
+	GemRB.SetModalState (pc, MS_TURNUNDEAD)
 	GemRB.PlaySound ("act_06")
 	UpdateActionsWindow ()
 	return
@@ -544,7 +707,7 @@ def ActionQItemPressed (action):
 	"""Uses the given quick item."""
 	pc = GemRB.GameGetFirstSelectedActor ()
 	#quick slot
-	GemRB.UseItem (pc, -2, action, -1, 1)
+	GemRB.UseItem (pc, -2, action, -1)
 	return
 
 def ActionQItem1Pressed ():
@@ -610,6 +773,12 @@ def ActionInnatePressed ():
 	UpdateActionsWindow ()
 	return
 
+def ActionSkillsPressed ():
+	GemRB.SetVar ("TopIndex", 0)
+	GemRB.SetVar ("ActionLevel", 6)
+	UpdateActionsWindow ()
+	return
+
 def SpellPressed ():
 	"""Prepares a spell to be cast."""
 
@@ -618,12 +787,15 @@ def SpellPressed ():
 	GemRB.GameControlSetTargetMode (TARGET_MODE_CAST)
 	Spell = GemRB.GetVar ("Spell")
 	Type = GemRB.GetVar ("Type")
+	if Type != -1:
+		Type = Spell // 1000
+	Spell = Spell % 1000
 	slot = GemRB.GetVar ("QSpell")
 	if slot>=0:
 		#setup quickspell slot
 		#if spell has no target, return
 		#otherwise continue with casting
-		Target = GemRB.SetupQuickSpell (pc, slot, Spell, Type, 1)
+		Target = GemRB.SetupQuickSpell (pc, slot, Spell, Type)
 		#sabotage the immediate casting of self targeting spells
 		if Target == 5 or Target == 7:
 			Type = -1
@@ -632,11 +804,11 @@ def SpellPressed ():
 	if Type==-1:
 		GemRB.SetVar ("ActionLevel", 0)
 		GemRB.SetVar("Type", 0)
-	GemRB.SpellCast (pc, Type, Spell, 1)
+	GemRB.SpellCast (pc, Type, Spell)
 	if GemRB.GetVar ("Type")!=-1:
 		GemRB.SetVar ("ActionLevel", 0)
 		#init spell list
-		GemRB.SpellCast (pc, -1, 0, 1)
+		GemRB.SpellCast (pc, -1, 0)
 	GemRB.SetVar ("TopIndex", 0)
 	UpdateActionsWindow ()
 	return
@@ -647,10 +819,64 @@ def EquipmentPressed ():
 	GemRB.GameControlSetTargetMode (TARGET_MODE_CAST)
 	Item = GemRB.GetVar ("Equipment")
 	#equipment index
-	GemRB.UseItem (pc, -1, Item, -1, 1)
+	GemRB.UseItem (pc, -1, Item, -1)
 	GemRB.SetVar ("ActionLevel", 0)
 	UpdateActionsWindow ()
 	return
+
+# NOTE: the following 4 functions are only used in iwd2
+def GetActorRaceTitle (actor):
+	RaceID = GemRB.GetPlayerStat (actor, IE_SUBRACE)
+	if RaceID:
+		RaceID += GemRB.GetPlayerStat (actor, IE_RACE)<<16
+	else:
+		RaceID = GemRB.GetPlayerStat (actor, IE_RACE)
+	row = CommonTables.Races.FindValue (3, RaceID )
+	RaceTitle = CommonTables.Races.GetValue (row, 2)
+	return RaceTitle
+
+# NOTE: this function is called with the primary classes
+def GetKitIndex (actor, ClassIndex):
+	Kit = GemRB.GetPlayerStat (actor, IE_KIT)
+
+	KitIndex = -1
+	ClassID = CommonTables.Classes.GetValue (ClassIndex, 2)
+	# skip the primary classes
+	for ci in range (10, CommonTables.Classes.GetRowCount ()):
+		BaseClass = CommonTables.Classes.GetValue (ci, 3)
+		if BaseClass == ClassID and Kit & CommonTables.Classes.GetValue (ci, 2):
+			KitIndex = ci
+
+	if KitIndex == -1:
+		return 0
+
+	return KitIndex
+
+def GetActorClassTitle (actor, ClassIndex):
+	ClassTitle = GemRB.GetPlayerStat (actor, IE_TITLE1)
+	if ClassTitle:
+		return ClassTitle
+
+	#Class = GemRB.GetPlayerStat (actor, IE_CLASS)
+	KitIndex = GetKitIndex (actor, ClassIndex)
+	if KitIndex == 0:
+		ClassTitle = CommonTables.Classes.GetValue (ClassIndex, 0)
+	else:
+		ClassTitle = CommonTables.Classes.GetValue (KitIndex, 0)
+
+	if ClassTitle == "*":
+		return 0
+	return ClassTitle
+
+# overriding the one in GUICommon, since we use a different table and animations
+def GetActorPaperDoll (actor):
+	PortraitTable = GemRB.LoadTable ("avatars")
+	anim_id = GemRB.GetPlayerStat (actor, IE_ANIMATION_ID)
+	level = GemRB.GetPlayerStat (actor, IE_ARMOR_TYPE)
+	row = "0x%04X" %anim_id
+	which = "AT_%d" %(level+1)
+	return PortraitTable.GetValue (row, which)
+
 
 SelectionChangeHandler = None
 
@@ -680,21 +906,42 @@ def RunSelectionChangeHandler ():
 		SelectionChangeHandler ()
 	return
 
-def OpenPortraitWindow (needcontrols):
+def OpenPortraitWindow (needcontrols=0):
 	global PortraitWindow
 
-	PortraitWindow = Window = GemRB.LoadWindow (1)
+	#take care, this window is different in how/iwd
+	if GUICommon.HasHOW() and needcontrols:
+		PortraitWindow = Window = GemRB.LoadWindow (26)
+	else:
+		PortraitWindow = Window = GemRB.LoadWindow (1)
 
 	if needcontrols:
 		# 1280 and higher don't have this control
 		if Window.HasControl (8):
 			Button=Window.GetControl (8)
-			Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, MinimizePortraits)
+			if GUICommon.GameIsIWD():
+				# Rest (iwd)
+				Button.SetTooltip (11942)
+				Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUICommon.RestPress)
+			else:
+				Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, MinimizePortraits)
+		else:
+			if GUICommon.HasHOW():
+				# Rest (how)
+				pos = GemRB.GetSystemVariable (SV_HEIGHT) - 37
+				Window.CreateButton (8, 6, pos, 55, 37)
+				Button = Window.GetControl (8)
+				Button.SetSprites ("GUIRSBUT", 0,0,1,0,0)
+				Button.SetTooltip (11942)
+				Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUICommon.RestPress)
+
+				pos = pos - 37
+				Window.CreateButton (6, 6, pos, 27, 36)
 
 		# AI
 		Button = Window.GetControl (6)
 		#fixing a gui bug, and while we are at it, hacking it to be easier
-		Button.SetSprites ("GUIBTACT", 0, 48, 47, 46, 49)
+		Button.SetSprites ("GUIBTACT", 0, 46, 47, 48, 49)
 		GSFlags = GemRB.GetMessageWindowSize ()&GS_PARTYAI
 
 		GemRB.SetVar ("AI", GSFlags)
@@ -707,16 +954,27 @@ def OpenPortraitWindow (needcontrols):
 			Button.SetTooltip (15918)
 
 		#Select All
-		Button = Window.GetControl (7)
+		if GUICommon.HasHOW():
+			Window.CreateButton (7, 33, pos, 27, 36)
+			Button = Window.GetControl (7)
+			Button.SetSprites ("GUIBTACT", 0, 50, 51, 50, 51)
+		else:
+			Button = Window.GetControl (7)
 		Button.SetTooltip (10485)
 		Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUICommon.SelectAllOnPress)
+	else:
+		# Rest
+		if Window.HasControl(6) and not GUICommon.GameIsIWD2():
+			Button = Window.GetControl (6)
+			Button.SetTooltip (11942)
+			Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, GUICommon.RestPress)
 
 	for i in range (PARTY_SIZE):
 		Button = Window.GetControl (i)
 		Button.SetFont ("STATES2")
 		Button.SetVarAssoc ("PressedPortrait", i+1)
 
-		if (needcontrols):
+		if needcontrols or GUICommon.GameIsIWD2():
 			Button.SetEvent (IE_GUI_BUTTON_ON_RIGHT_PRESS, GUIINV.OpenInventoryWindowClick)
 		else:
 			Button.SetEvent (IE_GUI_BUTTON_ON_RIGHT_PRESS, PortraitButtonOnPress)
@@ -728,6 +986,10 @@ def OpenPortraitWindow (needcontrols):
 		Button.SetEvent (IE_GUI_BUTTON_ON_DRAG, PortraitButtonOnDrag)
 		Button.SetEvent (IE_GUI_MOUSE_ENTER_BUTTON, PortraitButtonOnMouseEnter)
 		Button.SetEvent (IE_GUI_MOUSE_LEAVE_BUTTON, PortraitButtonOnMouseLeave)
+
+		if GUICommon.GameIsIWD1():
+			# overlay a label, so we can display the hp with the correct font
+			Button.CreateLabelOnButton(100+i, "NUMFONT", IE_GUI_BUTTON_ALIGN_TOP|IE_GUI_BUTTON_ALIGN_LEFT)
 
 		Button.SetBorder (FRAME_PC_SELECTED, 1, 1, 2, 2, 0, 255, 0, 255)
 		Button.SetBorder (FRAME_PC_TARGET, 3, 3, 4, 4, 255, 255, 0, 255)
@@ -763,13 +1025,19 @@ def UpdatePortraitWindow ():
 			Button.SetTooltip ("")
 			continue
 
-		Button.SetFlags (IE_GUI_BUTTON_PICTURE| IE_GUI_BUTTON_HORIZONTAL| \
-				IE_GUI_BUTTON_ALIGN_LEFT| IE_GUI_BUTTON_ALIGN_TOP| \
-				IE_GUI_BUTTON_DRAGGABLE|IE_GUI_BUTTON_MULTILINE, OP_SET)
+		portraitFlags = IE_GUI_BUTTON_PICTURE| IE_GUI_BUTTON_HORIZONTAL| \
+			IE_GUI_BUTTON_ALIGN_LEFT| IE_GUI_BUTTON_DRAGGABLE|IE_GUI_BUTTON_MULTILINE
+		if GUICommon.GameIsIWD2():
+			portraitFlags |= IE_GUI_BUTTON_ALIGN_BOTTOM
+			Button.SetEvent (IE_GUI_BUTTON_ON_RIGHT_PRESS, GUIINV.OpenInventoryWindowClick)
+			Button.SetEvent (IE_GUI_BUTTON_ON_PRESS, PortraitButtonOnPress)
+		else:
+			portraitFlags |= IE_GUI_BUTTON_ALIGN_TOP
+		Button.SetFlags (portraitFlags, OP_SET)
 
 		Button.SetState (IE_GUI_BUTTON_LOCKED)
 		Button.SetPicture (pic, "NOPORTSM")
-		GUICommon.SetupDamageInfo (portid+1, Button)
+		ratio_str = GUICommon.SetupDamageInfo (portid+1, Button)
 
 		#add effects on the portrait
 		effects = GemRB.GetPlayerStates (portid+1)
@@ -781,21 +1049,35 @@ def UpdatePortraitWindow ():
 			states = "\n" + states
 		states = "\n" + states
 
+		# character - 1 == bam cycle
 		# blank space
-		flag = blank = chr(238)
+		if GUICommon.GameIsBG2() or GUICommon.GameIsIWD2():
+			flag = blank = chr(238)
+			talk = 154
+			store = 155
+		else:
+			# iwd is missing all of these, including the blank (didn't display a talking icon though)
+			# TODO: add another string tag to make glyphs 100% transparent?
+			flag = blank = chr(33)
+			talk = store = 37
 
-		# shopping icon
-		if pc==portid+1:
-			if GemRB.GetStore()!=None:
-				flag = chr(155)
-		# talk icon
-		if GemRB.GameGetSelectedPCSingle(1)==portid+1:
-			flag = chr(154)
+		if not GUICommon.GameIsIWD1():
+			# shopping icon
+			if pc==portid+1:
+				if GemRB.GetStore()!=None:
+					flag = chr(store)
+			# talk icon
+			if GemRB.GameGetSelectedPCSingle(1)==portid+1:
+				flag = chr(talk)
 
 		if LUCommon.CanLevelUp (portid+1):
 			states = flag+blank+chr(255) + states
 		else:
-			states = flag+blank+blank + states
+			if GUICommon.GameIsIWD1():
+				HPLabel = Window.GetControl (100+portid)
+				HPLabel.SetText (ratio_str) # TODO: color depending on the ratio
+			else:
+				states = flag+blank+blank + states
 		Button.SetText(states)
 	return
 
@@ -934,7 +1216,7 @@ def PortraitButtonOnMouseLeave ():
 
 def ActionStopPressed ():
 	for i in GemRB.GetSelectedActors():
-		GemRB.ClearActions (i, 1)
+		GemRB.ClearActions (i)
 	return
 
 def ActionTalkPressed ():

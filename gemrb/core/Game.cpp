@@ -841,9 +841,13 @@ failedload:
 
 // check if the actor is in npclevel.2da and replace accordingly
 bool Game::CheckForReplacementActor(int i) {
+	if (core->InCutSceneMode() || npclevels.empty()) {
+		return false;
+	}
+
 	Actor* act = NPCs[i];
 	ieDword level = GetPartyLevel(false) / GetPartySize(false);
-	if (! npclevels.empty() && !(act->Modified[IE_MC_FLAGS]&MC_BEENINPARTY) && !(act->Modified[IE_STATE_ID]&STATE_DEAD) && act->GetXPLevel(false) < level) {
+	if (!(act->Modified[IE_MC_FLAGS]&MC_BEENINPARTY) && !(act->Modified[IE_STATE_ID]&STATE_DEAD) && act->GetXPLevel(false) < level) {
 		ieResRef newcre = "****"; // default table value
 		std::vector<std::vector<const char *> >::iterator it;
 		for (it = npclevels.begin(); it != npclevels.end(); it++) {
@@ -863,6 +867,7 @@ bool Game::CheckForReplacementActor(int i) {
 					error("Game::CheckForReplacementActor", "GetNPC failed: cannot find act!\n");
 				} else {
 					newact->Pos = act->Pos; // the map is not loaded yet, so no SetPosition
+					strncpy(newact->Area, act->Area, sizeof(ieResRef));
 					DelNPC(InStore(act));
 					return true;
 				}
@@ -1500,8 +1505,8 @@ void Game::RestParty(int checks, int dream, int hp)
 	}
 
 	//rest check, if PartyRested should be set, area should return true
-	//area should advance gametime too (so partial rest is possible)
 	int hours = 8;
+	int hoursLeft = 0;
 	if (!(checks&REST_NOAREA) ) {
 		//you cannot rest here
 		if (area->AreaFlags&1) {
@@ -1515,11 +1520,26 @@ void Game::RestParty(int checks, int dream, int hp)
 			return;
 		}
 		//area encounters
-		if(area->Rest( leader->Pos, hours, (GameTime/AI_UPDATE_TIME)%7200/3600) ) {
-			return;
+		// also advances gametime (so partial rest is possible)
+		hoursLeft = area->Rest( leader->Pos, hours, (GameTime/AI_UPDATE_TIME)%7200/3600);
+		if (hoursLeft) {
+			// partial rest only, so adjust the parameters for the loop below
+			if (hp) {
+				hp = hp * (hours - hoursLeft) / hours;
+				// 0 means full heal, so we need to cancel it if we rounded to 0
+				if (!hp) {
+					hp = 1;
+				}
+			}
+			hours -= hoursLeft;
+			// the interruption occured before any resting could be done, so just bail out
+			if (!hours) {
+				return;
+			}
 		}
+	} else {
+		AdvanceTime(hours*300*AI_UPDATE_TIME);
 	}
-	AdvanceTime(2400*AI_UPDATE_TIME);
 
 	int i = GetPartySize(true); // party size, only alive
 
@@ -1532,7 +1552,14 @@ void Game::RestParty(int checks, int dream, int hp)
 		tar->Heal(hp);
 		//removes fatigue, recharges spells
 		tar->Rest(hours);
-		tar->PartyRested();
+		if (hoursLeft) {
+			tar->PartyRested();
+		}
+	}
+
+	// abort the partial rest; we got what we wanted
+	if (hoursLeft) {
+		return;
 	}
 
 	//movie and cutscene dreams
